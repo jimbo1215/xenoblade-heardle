@@ -140,7 +140,6 @@
   const failedIds=new Set();
   let attempt=0; // 0..5
   let currentSong=null;
-  let onceTriedPlayUnlock=false;
 
   /* ==================== UTILS ==================== */
   const $ = sel => document.querySelector(sel);
@@ -192,6 +191,32 @@
     }catch(e){ log('Audio unlock failed: '+e.message); }
   }
 
+  let pendingGestureUnlock=null;
+  function installGestureUnlock(){
+    if (!player || typeof player.playVideo !== 'function') return;
+    if (pendingGestureUnlock) return;
+
+    const opts = { passive:true };
+    const handler = ()=>{
+      document.removeEventListener('pointerdown', handler, opts);
+      document.removeEventListener('touchstart', handler, opts);
+      pendingGestureUnlock = null;
+      try{
+        player.mute();
+        player.playVideo();
+        player.pauseVideo();
+        player.unMute();
+        log('Player unlocked via gesture');
+      }catch(e){
+        log('Gesture unlock failed: '+e.message);
+      }
+    };
+
+    pendingGestureUnlock = handler;
+    document.addEventListener('pointerdown', handler, opts);
+    document.addEventListener('touchstart', handler, opts);
+  }
+
   /* ==================== YT API LOADER ==================== */
   let ytReadyPromise=null; let ytReadyResolve=null;
   function injectYT(){
@@ -239,12 +264,6 @@
 
     // Wait for CUED (or timeout) then try a muted nudge, then play clip.
     await Promise.race([ new Promise(r=>{ const t=setInterval(()=>{ try{ if(player.getPlayerState()===YT.PlayerState.CUED){ clearInterval(t); r(); } }catch{} },50); }), sleep(700) ]);
-
-    // Muted kickstart once (helps iOS/Safari)
-    if (!onceTriedPlayUnlock){
-      onceTriedPlayUnlock=true;
-      try{ player.mute(); player.playVideo(); await sleep(150); player.pauseVideo(); player.unMute(); log('Muted kickstart done'); }catch(e){ log('kickstart failed: '+e.message); }
-    }
 
     playClip();
   }
@@ -298,10 +317,11 @@
     try{ await createPlayer(); }catch(e){ log('player create failed: '+e.message); }
     if (!isReady){ log('Waiting for YT…'); for(let i=0;i<20 && !isReady;i++){ await sleep(150);} }
     if (!isReady){ $('#result').textContent='YouTube failed to initialize. Check CSP or connection.'; $('#result').style.color='red'; return; }
+    installGestureUnlock();
     await startRound();
   });
 
-  $('#audioTest').addEventListener('click', async ()=>{ await unlockAudioOnce(); });
+  $('#audioTest').addEventListener('click', async ()=>{ await unlockAudioOnce(); installGestureUnlock(); });
   $('#playBtn').addEventListener('click', ()=> playClip());
   $('#guessBtn').addEventListener('click', ()=> submitGuess());
   $('#skipBtn').addEventListener('click', ()=> skip());
