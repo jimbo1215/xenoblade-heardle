@@ -149,7 +149,12 @@
   function dailyIndex(mod){ const day=Math.floor(Date.now()/86400000); return ((day%mod)+mod)%mod; }
 
   async function loadBackgroundSafe(urls, timeoutMs=3500){
-    const expand = (u)=>{ const bare=u.replace(/^https?:\/\//,''); return [u, `https://images.weserv.nl/?url=${encodeURIComponent(bare)}&w=1600&h=900&fit=cover&we&output=webp`, `https://wsrv.nl/?url=${encodeURIComponent(bare)}&w=1600&h=900&fit=cover&we&output=webp`]; };
+    const expand = (u)=>{
+      const bare=u.replace(/^https?:\/\//,'');
+      const encodeForProxy=(raw)=>encodeURIComponent(raw).replace(/%25([0-9A-Fa-f]{2})/g,'%$1');
+      const encoded=encodeForProxy(bare);
+      return [u, `https://images.weserv.nl/?url=${encoded}&w=1600&h=900&fit=cover&we&output=webp`, `https://wsrv.nl/?url=${encoded}&w=1600&h=900&fit=cover&we&output=webp`];
+    };
     const candidates = urls.flatMap(expand);
     for (const url of candidates){
       try{
