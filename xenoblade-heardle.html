@@ -149,7 +149,35 @@
   function dailyIndex(mod){ const day=Math.floor(Date.now()/86400000); return ((day%mod)+mod)%mod; }
 
   async function loadBackgroundSafe(urls, timeoutMs=3500){
-    const expand = (u)=>{ const bare=u.replace(/^https?:\/\//,''); return [u, `https://images.weserv.nl/?url=${encodeURIComponent(bare)}&w=1600&h=900&fit=cover&we&output=webp`, `https://wsrv.nl/?url=${encodeURIComponent(bare)}&w=1600&h=900&fit=cover&we&output=webp`]; };
+    const expand = (rawUrl)=>{
+      const seen=[];
+      const pushUnique=(val)=>{ if(val && !seen.includes(val)) seen.push(val); };
+      const strictEncode=(value)=>{
+        if(!value) return '';
+        let decoded=value.trim();
+        if(!decoded) return '';
+        try{ decoded = decodeURI(decoded); }catch{}
+        const encoded=encodeURIComponent(decoded);
+        return encoded.replace(/[!'()*]/g,c=>`%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+      };
+      let normalized=rawUrl;
+      try{ normalized=new URL(rawUrl, window.location.href).href; }catch{}
+      pushUnique(normalized);
+      const encodedFull=strictEncode(normalized);
+      if(encodedFull){
+        pushUnique(`https://images.weserv.nl/?url=${encodedFull}&w=1600&h=900&fit=cover&we&output=webp`);
+        pushUnique(`https://wsrv.nl/?url=${encodedFull}&w=1600&h=900&fit=cover&we&output=webp`);
+      }
+      const bare=normalized.replace(/^https?:\/\//,'');
+      if(bare!==normalized){
+        const encodedBare=strictEncode(bare);
+        if(encodedBare){
+          pushUnique(`https://images.weserv.nl/?url=${encodedBare}&w=1600&h=900&fit=cover&we&output=webp`);
+          pushUnique(`https://wsrv.nl/?url=${encodedBare}&w=1600&h=900&fit=cover&we&output=webp`);
+        }
+      }
+      return seen;
+    };
     const candidates = urls.flatMap(expand);
     for (const url of candidates){
       try{
