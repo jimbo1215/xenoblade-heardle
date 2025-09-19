@@ -143,8 +143,7 @@
 
   /* ==================== UTILS ==================== */
   const $ = sel => document.querySelector(sel);
-  function log(msg){ const d=$('#diag'); d.textContent=(d.textContent+"
-"+msg).trim().slice(-2000); d.scrollTop=d.scrollHeight; }
+  function log(msg){ const d=$('#diag'); d.textContent=(d.textContent+' '+msg).trim().slice(-2000); d.scrollTop=d.scrollHeight; }
   const sleep = ms => new Promise(r=>setTimeout(r,ms));
 
   function dailyIndex(mod){ const day=Math.floor(Date.now()/86400000); return ((day%mod)+mod)%mod; }
