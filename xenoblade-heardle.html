@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Xenoblade Heardle – v3 (Netlify-safe)</title>
+  <style>
+    :root { --accent:#ffd700; }
+    *{box-sizing:border-box}
+    body{
+      font-family:system-ui,Segoe UI,Arial,sans-serif; text-align:center;
+      background-size:cover; background-position:center; background-color:#1a1a1a; color:#fff;
+      margin:0; padding:20px; min-height:100vh; display:flex; justify-content:center; align-items:center;
+      -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+    }
+    #container{ background:rgba(0,0,0,.72); padding:22px; border-radius:16px; max-width:680px; width:100%; box-shadow:0 8px 30px rgba(0,0,0,.35) }
+    h1{ color:var(--accent); margin:0 0 8px }
+    p{ margin:6px 0 }
+    input[type=text]{ width:100%; padding:12px; margin:12px 0 10px; border:1px solid #333; background:#111; color:#fff; border-radius:8px }
+    .row{ display:flex; flex-wrap:wrap; gap:8px; justify-content:center; align-items:center }
+    button{ padding:10px 16px; cursor:pointer; background:var(--accent); border:none; border-radius:10px; color:#000; font-weight:700 }
+    button:hover:not(:disabled){ filter:brightness(.95) }
+    button:disabled{ background:#666; color:#222; cursor:not-allowed }
+    progress{ width:220px; height:12px }
+    #progresses{ margin:16px 0; display:flex; flex-direction:column; align-items:center; gap:10px }
+    .progress-row{ display:flex; align-items:center; gap:10px }
+    #result{ font-weight:700; margin:14px 0; font-size:18px; min-height:24px }
+    #player{ display:none; margin:14px auto; width:100%; max-width:560px; height:315px }
+    #guess-section{ display:none }
+    #diag{ font-family:ui-monospace,Consolas,monospace; white-space:pre-wrap; opacity:.8; font-size:12px; margin-top:8px; text-align:left; max-height:160px; overflow:auto; background:#0d0d0d; border:1px solid #222; padding:8px; border-radius:8px }
+    .small{ font-size:12px; opacity:.9 }
+    @media (max-width:680px){ #container{ padding:14px } button{ padding:10px 14px; font-size:14px } progress{ width:170px } #player{ height:200px } }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <h1>Xenoblade Heardle</h1>
+    <p>Guess the song. The video appears—and audio plays—only after you finish guessing.</p>
+
+    <div class="row" id="gate-row">
+      <button id="start">Tap to Start</button>
+      <button id="audioTest" class="small" title="If you have no audio, tap this first">Enable Audio</button>
+    </div>
+
+    <div id="guess-section" aria-live="polite">
+      <div id="player" allow="autoplay; encrypted-media; fullscreen; picture-in-picture"></div>
+      <input id="guessInput" type="text" list="songs" placeholder="Type the song title…" autocomplete="off" />
+      <datalist id="songs"></datalist>
+      <div class="row">
+        <button id="guessBtn">Guess</button>
+        <button id="skipBtn">Skip</button>
+        <button id="playBtn">Play Current Clip</button>
+      </div>
+      <div id="progresses">
+        <div class="progress-row">
+          <label>Guesses:</label>
+          <progress id="guessProgress" value="0" max="6"></progress>
+          <span id="guessLabel">0/6</span>
+        </div>
+        <div class="progress-row">
+          <label>Clip Length:</label>
+          <progress id="clipProgress" value="1" max="16"></progress>
+          <span id="clipLabel">1s / 16s</span>
+        </div>
+      </div>
+      <div id="result"></div>
+      <div id="diag" aria-hidden="true"></div>
+    </div>
+  </div>
+
+<script>
+  /* ==================== CONFIG ==================== */
+  const BACKGROUNDS = [
+    // Use Commons + proxy-friendly URLs to avoid hotlink/CORS issues.
+    'https://upload.wikimedia.org/wikipedia/commons/thumb/0/0e/Schafberg_and_Wolfgangsee_2010-06-06_%2801%29.jpg/1920px-Schafberg_and_Wolfgangsee_2010-06-06_%2801%29.jpg',
+    'https://upload.wikimedia.org/wikipedia/commons/thumb/2/2e/Schafbergseen_2.jpg/1920px-Schafbergseen_2.jpg',
+    'https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/Dolomites_from_Seceda.jpg/1920px-Dolomites_from_Seceda.jpg',
+    'https://upload.wikimedia.org/wikipedia/commons/thumb/8/8b/Glen_Coe_from_the_Devil%27s_Staircase_-_geograph.org.uk_-_2648317.jpg/1920px-Glen_Coe_from_the_Devil%27s_Staircase_-_geograph.org.uk_-_2648317.jpg'
+  ];
+
+  const SONGS = [
+    // XC1
+    { title:'Main Theme', game:'Xenoblade Chronicles', videoId:'erKkWGfEW9U' },
+    { title:'You Will Know Our Names', game:'Xenoblade Chronicles', videoId:'5aPA7gBY1ek' },
+    { title:'Engage the Enemy', game:'Xenoblade Chronicles', videoId:'GTCB79fDUOY' },
+    { title:'Gaur Plain', game:'Xenoblade Chronicles', videoId:'UDJtsfR51To' },
+    { title:'Mechanical Rhythm', game:'Xenoblade Chronicles', videoId:'Q0W0VyaoZzY' },
+    { title:'Time to Fight!', game:'Xenoblade Chronicles', videoId:'8S0KGphqJVk' },
+    { title:'A Tragic Decision', game:'Xenoblade Chronicles', videoId:'wLXyb_wJPc4' },
+    { title:'Beyond the Sky', game:'Xenoblade Chronicles', videoId:'OPWseKK3XvI' },
+    { title:'The End Lies Ahead', game:'Xenoblade Chronicles', videoId:'SLW7hAaGCGo' },
+    { title:'Colony 9', game:'Xenoblade Chronicles', videoId:'5oV76gY6v1Y' },
+    { title:'Satorl Marsh', game:'Xenoblade Chronicles', videoId:'0cYqChCNT6c' },
+    { title:'Visions of the Future', game:'Xenoblade Chronicles', videoId:'x2WUz8Bwcro' },
+    { title:'Zanza the Divine', game:'Xenoblade Chronicles', videoId:'MnVemwebkiY' },
+    // XC2
+    { title:'Counterattack', game:'Xenoblade Chronicles 2', videoId:'aElM_uHL00E' },
+    { title:'Drifting Soul', game:'Xenoblade Chronicles 2', videoId:'cvTb1VgABw8' },
+    { title:'One Last You', game:'Xenoblade Chronicles 2', videoId:'R6WKA_7LZHI' },
+    { title:'Mor Ardain - Roaming the Wastes', game:'Xenoblade Chronicles 2', videoId:'Tx3AbguQZHU' },
+    { title:'Incoming!', game:'Xenoblade Chronicles 2', videoId:'zukZtQQ2hDU' },
+    { title:'Elysium, in the Blue Sky', game:'Xenoblade Chronicles 2', videoId:'zF5G9seFrY8' },
+    { title:'Gormott', game:'Xenoblade Chronicles 2', videoId:'zG8MREuNu5U' },
+    { title:'You Will Recall Our Names', game:'Xenoblade Chronicles 2', videoId:'b0KzIa_0hAM' },
+    { title:'After Despair and Hope', game:'Xenoblade Chronicles 2', videoId:'XOKm2LsOkA4' },
+    { title:'The Decision', game:'Xenoblade Chronicles 2', videoId:'q3Bxm7k0l6Q' },
+    // Torna
+    { title:'The Beginning of Our Memory', game:'XC2: Torna ~ The Golden Country', videoId:'w2UNfYAvJyc' },
+    { title:'Battle!! / Torna', game:'XC2: Torna ~ The Golden Country', videoId:'pWJeC-j0g3U' },
+    { title:'Auresco, Royal Capital', game:'XC2: Torna ~ The Golden Country', videoId:'q3UqI0tL4y8' },
+    { title:'A Moment of Eternity', game:'XC2: Torna ~ The Golden Country', videoId:'vV_p0CRn2yI' },
+    { title:'Over Despair and Animus', game:'XC2: Torna ~ The Golden Country', videoId:'u5pYNFkK0hQ' },
+    // XC3
+    { title:'The Weight of Life', game:'Xenoblade Chronicles 3', videoId:'aQpeLBl6uUk' },
+    { title:'A Life Sent On', game:'Xenoblade Chronicles 3', videoId:'YNYXLWYcu-A' },
+    { title:'Chain Attack!', game:'Xenoblade Chronicles 3', videoId:'TYPSEjoOV9A' },
+    { title:'Battle!!', game:'Xenoblade Chronicles 3', videoId:'RVxRnELD0Uw' },
+    { title:'Keves Battle', game:'Xenoblade Chronicles 3', videoId:'_sQnu-YKjL4' },
+    { title:'Moebius Battle', game:'Xenoblade Chronicles 3', videoId:'q8Y-37ybYiM' },
+    { title:'Where We Belong', game:'Xenoblade Chronicles 3', videoId:'gyhx91rLaJI' },
+    { title:'A Step Away', game:'Xenoblade Chronicles 3', videoId:'-TlbGC7nPmA' },
+    { title:'Yzana Plains', game:'Xenoblade Chronicles 3', videoId:'IUhvL0y6a2k' },
+    { title:'Off-Seer - Noah', game:'Xenoblade Chronicles 3', videoId:'V7B_Ed1e4gU' },
+    // Future Redeemed
+    { title:'New Battle!!!', game:'XC3: Future Redeemed', videoId:'D3hF0g2k5qE' },
+    { title:'Shining Aspiration - Inherited Melody', game:'XC3: Future Redeemed', videoId:'g9S0z6Xv2hQ' },
+    { title:'Black Mountain - The Untrodden Path', game:'XC3: Future Redeemed', videoId:'2z8B6T5W2pU' },
+    { title:'Legacy', game:'XC3: Future Redeemed', videoId:'Xz3xKnVrEms' },
+    { title:'Beyond Fate', game:'XC3: Future Redeemed', videoId:'4YkCjkq2z1Q' },
+    // XCX placeholders (safe to keep empty—they're skipped automatically)
+    { title:'Black Tar', game:'Xenoblade Chronicles X', videoId:'' },
+    { title:'No.EX01', game:'Xenoblade Chronicles X', videoId:'' },
+    { title:'Codename Z', game:'Xenoblade Chronicles X', videoId:'' }
+  ];
+
+  const DURATIONS = [1,2,4,7,11,16]; // seconds
+
+  /* ==================== STATE ==================== */
+  let player, isReady=false, audioUnlocked=false, gameOver=false, clipTimer=null;
+  const failedIds=new Set();
+  let attempt=0; // 0..5
+  let currentSong=null;
+  let onceTriedPlayUnlock=false;
+
+  /* ==================== UTILS ==================== */
+  const $ = sel => document.querySelector(sel);
+  function log(msg){ const d=$('#diag'); d.textContent=(d.textContent+"
+"+msg).trim().slice(-2000); d.scrollTop=d.scrollHeight; }
+  const sleep = ms => new Promise(r=>setTimeout(r,ms));
+
+  function dailyIndex(mod){ const day=Math.floor(Date.now()/86400000); return ((day%mod)+mod)%mod; }
+
+  async function loadBackgroundSafe(urls, timeoutMs=3500){
+    const expand = (u)=>{ const bare=u.replace(/^https?:\/\//,''); return [u, `https://images.weserv.nl/?url=${encodeURIComponent(bare)}&w=1600&h=900&fit=cover&we&output=webp`, `https://wsrv.nl/?url=${encodeURIComponent(bare)}&w=1600&h=900&fit=cover&we&output=webp`]; };
+    const candidates = urls.flatMap(expand);
+    for (const url of candidates){
+      try{
+        await new Promise((res,rej)=>{ const im=new Image(); const to=setTimeout(()=>{im.src=''; rej(new Error('bg timeout'));},timeoutMs); im.onload=()=>{clearTimeout(to); res();}; im.onerror=()=>{clearTimeout(to); rej(new Error('bg error'));}; im.referrerPolicy='no-referrer'; im.crossOrigin='anonymous'; im.src=url; });
+        document.body.style.backgroundImage=`url(${url})`;
+        log('BG loaded: '+url); return true;
+      }catch(e){ log('BG failed: '+url+' ('+e.message+')'); }
+    }
+    document.body.style.backgroundImage='radial-gradient(1200px 600px at 50% -10%, rgba(255,215,0,.12), rgba(0,0,0,0) 60%), linear-gradient(#0e0e0e,#1a1a1a)';
+    return false;
+  }
+
+  function populateDatalist(){ const dl=$('#songs'); dl.innerHTML=''; const seen=new Set(); for(const s of SONGS){ if(!s.title||seen.has(s.title)) continue; seen.add(s.title); const o=document.createElement('option'); o.value=s.title; dl.appendChild(o);} }
+
+  function pickSong(){
+    if (!SONGS.length) return null;
+    let idx = dailyIndex(SONGS.length);
+    for (let i=0;i<SONGS.length;i++){
+      const s = SONGS[(idx+i)%SONGS.length];
+      if (!s.videoId) continue; if (failedIds.has(s.videoId)) continue; return s;
+    } return null;
+  }
+
+  function updateProgress(){ $('#guessProgress').value=attempt; $('#guessLabel').textContent=`${attempt}/6`; const clip=DURATIONS[Math.min(attempt, DURATIONS.length-1)]; $('#clipProgress').value=clip; $('#clipLabel').textContent=`${clip}s / 16s`; }
+  function disableInputs(b){ $('#guessInput').disabled=b; $('#guessBtn').disabled=b; $('#skipBtn').disabled=b; $('#playBtn').disabled=b; }
+
+  function endGame(){ gameOver=true; clearTimeout(clipTimer); $('#player').style.display='block'; try{ player.setSize(560,315); player.loadVideoById(currentSong.videoId,0); }catch{} disableInputs(true); log('Game ended; full video shown.'); }
+
+  /* ==================== AUDIO UNLOCK (WebAudio) ==================== */
+  let ctx=null;
+  async function unlockAudioOnce(){
+    if (audioUnlocked) return; try{
+      const AudioContext = window.AudioContext || window.webkitAudioContext; if (!AudioContext) { audioUnlocked=true; return; }
+      ctx = ctx || new AudioContext();
+      if (ctx.state === 'suspended') { await ctx.resume(); }
+      const osc = ctx.createOscillator(); const gain = ctx.createGain(); gain.gain.value=0.0001; osc.connect(gain).connect(ctx.destination); osc.start(); await sleep(120); osc.stop();
+      audioUnlocked = true; log('Audio unlocked via WebAudio');
+    }catch(e){ log('Audio unlock failed: '+e.message); }
+  }
+
+  /* ==================== YT API LOADER ==================== */
+  let ytReadyPromise=null; let ytReadyResolve=null;
+  function injectYT(){
+    if (document.querySelector('script[src*="youtube.com/iframe_api"]')) return;
+    const s=document.createElement('script'); s.src='https://www.youtube.com/iframe_api'; s.async=true; document.head.appendChild(s);
+  }
+  function waitForYT(){
+    if (window.YT && typeof YT.Player==='function') return Promise.resolve();
+    if (!ytReadyPromise){ ytReadyPromise = new Promise(res=>{ ytReadyResolve = res; }); }
+    return ytReadyPromise;
+  }
+  window.onYouTubeIframeAPIReady = function(){ log('YT API ready'); if (ytReadyResolve) ytReadyResolve(); };
+
+  async function createPlayer(){
+    await waitForYT();
+    return new Promise(resolve=>{
+      const vars = { autoplay:0, controls:0, disablekb:1, fs:0, rel:0, playsinline:1, modestbranding:1 };
+      // Do not set origin—YouTube handles it; avoids mismatches in some hosts.
+      player = new YT.Player('player',{
+        height:'315', width:'560',
+        playerVars: vars,
+        events:{
+          onReady: ()=>{ isReady=true; try{ player.setVolume(100); }catch{} log('YT ready'); resolve(); },
+          onStateChange: (e)=>{ if (e.data===YT.PlayerState.ENDED && !gameOver){ try{ player.pauseVideo(); }catch{} } if (e.data===YT.PlayerState.CUED){ log('YT state: CUED'); } },
+          onError: (e)=>{ const id=currentSong&&currentSong.videoId; if(id) failedIds.add(id); $('#result').textContent=`Error loading song: ${currentSong?currentSong.title:'(unknown)'} — skipping…`; $('#result').style.color='red'; log('YT error '+e.data+' for '+id); startNewSong(); }
+        }
+      });
+    });
+  }
+
+  /* ==================== GAME FLOW ==================== */
+  async function setDailyBackground(){ const startIdx=dailyIndex(BACKGROUNDS.length); const ordered=BACKGROUNDS.map((_,i)=>BACKGROUNDS[(startIdx+i)%BACKGROUNDS.length]); await loadBackgroundSafe(ordered); }
+
+  async function startRound(){
+    $('#gate-row').style.display='none'; $('#guess-section').style.display='block';
+    await setDailyBackground(); populateDatalist(); await startNewSong(true);
+  }
+
+  async function startNewSong(first=false){
+    gameOver=false; attempt=0; updateProgress(); disableInputs(false); $('#result').textContent=''; $('#result').style.color='';
+    currentSong = pickSong(); if (!currentSong){ $('#result').textContent='No playable songs available.'; $('#result').style.color='red'; disableInputs(true); return; }
+
+    $('#player').style.display='none'; try{ player.setSize(0,0); }catch{}
+    try{ player.cueVideoById(currentSong.videoId); }catch(e){ log('cue error: '+e.message); failedIds.add(currentSong.videoId); return startNewSong(); }
+
+    // Wait for CUED (or timeout) then try a muted nudge, then play clip.
+    await Promise.race([ new Promise(r=>{ const t=setInterval(()=>{ try{ if(player.getPlayerState()===YT.PlayerState.CUED){ clearInterval(t); r(); } }catch{} },50); }), sleep(700) ]);
+
+    // Muted kickstart once (helps iOS/Safari)
+    if (!onceTriedPlayUnlock){
+      onceTriedPlayUnlock=true;
+      try{ player.mute(); player.playVideo(); await sleep(150); player.pauseVideo(); player.unMute(); log('Muted kickstart done'); }catch(e){ log('kickstart failed: '+e.message); }
+    }
+
+    playClip();
+  }
+
+  function playClip(){
+    if (gameOver || !currentSong) return; clearTimeout(clipTimer);
+    const sec=DURATIONS[Math.min(attempt, DURATIONS.length-1)];
+    try{ player.seekTo(0,true); player.playVideo(); }catch{}
+    log('Playing clip '+sec+'s');
+    clipTimer=setTimeout(()=>{ if(!gameOver){ try{ player.pauseVideo(); }catch{} log('Clip paused'); } }, sec*1000);
+  }
+
+  function submitGuess(){
+    if (gameOver || !currentSong) return; const val=$('#guessInput').value.trim().toLowerCase(); $('#guessInput').value='';
+    if (val === currentSong.title.toLowerCase()){
+      $('#result').textContent = `Correct! It's "${currentSong.title}" from ${currentSong.game}.`; $('#result').style.color='lime'; endGame();
+    }else{ attempt++; updateProgress(); if (attempt>=6){ $('#result').textContent=`Game over. It was "${currentSong.title}" from ${currentSong.game}.`; $('#result').style.color='red'; endGame(); } }
+  }
+
+  function skip(){ if (gameOver) return; attempt++; updateProgress(); if (attempt>=6){ $('#result').textContent=`Game over. It was "${currentSong.title}" from ${currentSong.game}.`; $('#result').style.color='red'; endGame(); } }
+
+  /* ==================== WIRE UP ==================== */
+  window.addEventListener('pageshow',()=>{ setDailyBackground(); });
+  document.addEventListener('visibilitychange',()=>{ if(document.hidden){ clearTimeout(clipTimer); } });
+
+  $('#start').addEventListener('click', async ()=>{
+    log('Start tapped');
+    await unlockAudioOnce();
+    injectYT();
+    try{ await createPlayer(); }catch(e){ log('player create failed: '+e.message); }
+    if (!isReady){ log('Waiting for YT…'); for(let i=0;i<20 && !isReady;i++){ await sleep(150);} }
+    if (!isReady){ $('#result').textContent='YouTube failed to initialize. Check CSP or connection.'; $('#result').style.color='red'; return; }
+    await startRound();
+  });
+
+  $('#audioTest').addEventListener('click', async ()=>{ await unlockAudioOnce(); });
+  $('#playBtn').addEventListener('click', ()=> playClip());
+  $('#guessBtn').addEventListener('click', ()=> submitGuess());
+  $('#skipBtn').addEventListener('click', ()=> skip());
+  $('#guessInput').addEventListener('keydown', (e)=>{ if(e.key==='Enter') submitGuess(); });
+</script>
+</body>
+</html>
