@@ -149,6 +149,7 @@
   function dailyIndex(mod){ const day=Math.floor(Date.now()/86400000); return ((day%mod)+mod)%mod; }
 
   async function loadBackgroundSafe(urls, timeoutMs=3500){
+
     const expand = (rawUrl)=>{
       const seen=[];
       const pushUnique=(val)=>{ if(val && !seen.includes(val)) seen.push(val); };
