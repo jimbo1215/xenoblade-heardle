@@ -261,10 +261,31 @@
     if (gameOver || !currentSong) return; const val=$('#guessInput').value.trim().toLowerCase(); $('#guessInput').value='';
     if (val === currentSong.title.toLowerCase()){
       $('#result').textContent = `Correct! It's "${currentSong.title}" from ${currentSong.game}.`; $('#result').style.color='lime'; endGame();
-    }else{ attempt++; updateProgress(); if (attempt>=6){ $('#result').textContent=`Game over. It was "${currentSong.title}" from ${currentSong.game}.`; $('#result').style.color='red'; endGame(); } }
+    }else{
+      attempt++;
+      updateProgress();
+      if (attempt < 6) {
+        playClip();
+      } else {
+        $('#result').textContent=`Game over. It was "${currentSong.title}" from ${currentSong.game}.`;
+        $('#result').style.color='red';
+        endGame();
+      }
+    }
   }
 
-  function skip(){ if (gameOver) return; attempt++; updateProgress(); if (attempt>=6){ $('#result').textContent=`Game over. It was "${currentSong.title}" from ${currentSong.game}.`; $('#result').style.color='red'; endGame(); } }
+  function skip(){
+    if (gameOver) return;
+    attempt++;
+    updateProgress();
+    if (attempt < 6){
+      playClip();
+    }else{
+      $('#result').textContent=`Game over. It was "${currentSong.title}" from ${currentSong.game}.`;
+      $('#result').style.color='red';
+      endGame();
+    }
+  }
 
   /* ==================== WIRE UP ==================== */
   window.addEventListener('pageshow',()=>{ setDailyBackground(); });
